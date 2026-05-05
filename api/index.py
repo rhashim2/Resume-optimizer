@@ -1,3 +1,4 @@
+import asyncio
 import io
 import os
 import sys
@@ -65,8 +66,9 @@ async def analyze(
     from modules.llm import extract_keywords_from_jd, suggest_bullet_rewrites
     from modules.scoring import compute_match_score
 
+    # Step 1: keyword extraction (must finish before scoring)
     try:
-        jd_keywords = extract_keywords_from_jd(jd_text)
+        jd_keywords = await asyncio.to_thread(extract_keywords_from_jd, jd_text)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Keyword extraction failed: {exc}")
 
@@ -77,22 +79,27 @@ async def analyze(
 
     score_data = compute_match_score(resume_content, jd_keywords)
 
+    # Step 2: bullet rewrites — run in background, skip if it fails or times out
     rewrites: list[dict] = []
     if score_data["missing"]:
         bullets = _extract_bullets(resume_content)
         if bullets:
             try:
-                raw_rewrites = suggest_bullet_rewrites(
-                    bullets,
-                    score_data["missing"][:10],
-                    role_context=role_context,
+                raw_rewrites = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        suggest_bullet_rewrites,
+                        bullets,
+                        score_data["missing"][:10],
+                        role_context,
+                    ),
+                    timeout=7.0,  # hard cap — skip rewrites if Claude is slow
                 )
                 rewrites = [
                     r for r in raw_rewrites
                     if r.get("rewrite") and r.get("rewrite") != r.get("original", "")
                 ]
             except Exception:
-                rewrites = []
+                rewrites = []  # non-fatal — score + keywords still returned
 
     return {
         "overall_score": score_data["overall_score"],
@@ -120,7 +127,7 @@ async def optimize_resume(
     keywords = [k.strip() for k in missing_keywords.split(",") if k.strip()]
 
     try:
-        resume_data = generate_optimized_resume(resume_text, keywords)
+        resume_data = await asyncio.to_thread(generate_optimized_resume, resume_text, keywords)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Resume optimization failed: {exc}")
 
