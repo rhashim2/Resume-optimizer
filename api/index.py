@@ -3,7 +3,9 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# modules/ and templates/ live next to this file inside api/
+_HERE = Path(__file__).parent
+sys.path.insert(0, str(_HERE))
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -13,7 +15,7 @@ from fastapi.responses import HTMLResponse
 
 app = FastAPI(title="Resume Keyword Optimizer")
 
-_HTML_PATH = Path(__file__).parent.parent / "public" / "index.html"
+_HTML_PATH = _HERE / "templates" / "index.html"
 
 
 @app.get("/", response_class=HTMLResponse)
