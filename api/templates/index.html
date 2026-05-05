@@ -1248,128 +1248,149 @@ function redownloadPdf() {
   if (_pdfBlobUrl) _download(_pdfBlobUrl, 'optimized_resume.pdf');
 }
 
-/* ── jsPDF resume builder ── */
+/* ── jsPDF resume builder — auto-scales to fit 1 page ── */
 function buildResumePdf(data) {
+  /* Try at full scale, then shrink until it fits on one page */
+  for (let scale = 1.0; scale >= 0.78; scale -= 0.06) {
+    const { blob, pages } = _renderPdf(data, scale);
+    if (pages <= 1) return blob;
+  }
+  return _renderPdf(data, 0.78).blob;  // best effort
+}
+
+function _renderPdf(data, scale) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'letter' });
 
   const PW = 215.9, PH = 279.4;
-  const ML = 19.05, MR = 19.05, MT = 15, MB = 15;
-  const UW = PW - ML - MR;  // ~177.8 mm usable width
+  const ML = 19.05, MR = 19.05, MT = 14, MB = 12;
+  const UW = PW - ML - MR;
+
+  /* scaled sizes */
+  const SZ = {
+    name:    Math.round(18 * scale * 10) / 10,
+    sec:     Math.round(11 * scale * 10) / 10,
+    body:    Math.round(10 * scale * 10) / 10,
+  };
+  const LH = {
+    name:  SZ.name  * 0.3528 * 1.25,
+    sec:   SZ.sec   * 0.3528 * 1.25,
+    body:  SZ.body  * 0.3528 * 1.3,
+  };
+  const GAP_SEC   = 3.5 * scale;
+  const GAP_ENTRY = 1.5 * scale;
 
   let y = MT;
 
-  /* helpers */
-  const lh = { 18: 7.5, 11: 5.0, 10: 4.5 };
-  const bold   = s => { doc.setFont('times','bold');   doc.setFontSize(s); };
-  const normal = s => { doc.setFont('times','normal'); doc.setFontSize(s); };
-  const italic = s => { doc.setFont('times','italic'); doc.setFontSize(s); };
+  const bold   = s => { doc.setFont('times', 'bold');   doc.setFontSize(s); };
+  const normal = s => { doc.setFont('times', 'normal'); doc.setFontSize(s); };
+  const italic = s => { doc.setFont('times', 'italic'); doc.setFontSize(s); };
   const tw     = t => doc.getTextWidth(t);
 
-  function chk(h = 8) {
-    if (y + h > PH - MB) { doc.addPage(); y = MT; }
+  function hr() {
+    doc.setDrawColor(0); doc.setLineWidth(0.35);
+    doc.line(ML, y, PW - MR, y);
+    y += 2 * scale;
   }
 
-  function hr() {
-    doc.setDrawColor(0); doc.setLineWidth(0.4);
-    doc.line(ML, y, PW - MR, y);
-    y += 2.5;
+  function sectionHeader(title) {
+    y += GAP_SEC;
+    bold(SZ.sec);
+    doc.text(title, ML, y);
+    y += LH.sec;
+    hr();
+  }
+
+  function renderEntry(e, isFirst) {
+    const org     = (e.org      || '').trim();
+    const date    = (e.date     || '').trim();
+    const role    = (e.role     || '').trim();
+    const loc     = (e.location || '').trim();
+    const bullets = e.bullets || [];
+    const note    = (e.bold_note || '').trim();
+
+    if (!isFirst) y += GAP_ENTRY;
+
+    if (org && date) {
+      bold(SZ.sec);
+      const orgLines = doc.splitTextToSize(org, UW * 0.65);
+      doc.text(orgLines[0], ML, y);
+      normal(SZ.body);
+      doc.text(date, PW - MR, y, { align: 'right' });
+      for (let i = 1; i < orgLines.length; i++) {
+        y += LH.body; bold(SZ.sec); doc.text(orgLines[i], ML, y);
+      }
+      y += LH.sec;
+    } else if (org) {
+      bold(SZ.body);
+      doc.splitTextToSize(org, UW).forEach(ln => { doc.text(ln, ML, y); y += LH.body; });
+    }
+
+    if (role) {
+      italic(SZ.body);
+      doc.text(role, ML, y);
+      if (loc) doc.text(loc, PW - MR, y, { align: 'right' });
+      y += LH.body;
+    }
+
+    for (const b of bullets) {
+      normal(SZ.body);
+      const txt   = '• ' + (b || '').trim().replace(/^[•\-\*]\s*/, '');
+      const lines = doc.splitTextToSize(txt, UW - 4);
+      lines.forEach((ln, i) => { doc.text(ln, ML + (i > 0 ? 3.5 : 0), y); y += LH.body; });
+    }
+
+    if (note) {
+      const ci = note.indexOf(':');
+      if (ci > -1) {
+        const lbl  = note.slice(0, ci + 1);
+        const rest = note.slice(ci + 1);
+        bold(SZ.body);   doc.text(lbl, ML, y);
+        normal(SZ.body);
+        const lw     = tw(lbl);
+        const rLines = doc.splitTextToSize(rest, UW - lw);
+        doc.text(rLines[0], ML + lw, y); y += LH.body;
+        for (let i = 1; i < rLines.length; i++) { doc.text(rLines[i], ML, y); y += LH.body; }
+      } else {
+        normal(SZ.body);
+        doc.splitTextToSize(note, UW).forEach(ln => { doc.text(ln, ML, y); y += LH.body; });
+      }
+    }
   }
 
   /* ── Name */
-  bold(18); chk(lh[18]);
+  bold(SZ.name);
   doc.text(data.name || '', PW / 2, y, { align: 'center' });
-  y += lh[18];
+  y += LH.name;
 
   /* ── Contact */
-  normal(10); chk(lh[10]);
+  normal(SZ.body);
   doc.text(data.contact || '', PW / 2, y, { align: 'center' });
-  y += lh[10] + 3;
+  y += LH.body;
 
-  /* ── Sections */
+  /* ── Summary */
+  if (data.summary) {
+    sectionHeader('SUMMARY');
+    normal(SZ.body);
+    const sumLines = doc.splitTextToSize(data.summary.trim(), UW);
+    sumLines.forEach(ln => { doc.text(ln, ML, y); y += LH.body; });
+  }
+
+  /* ── Main sections */
   for (const sec of (data.sections || [])) {
-    if ((sec.title || '').toUpperCase().trim() === 'SKILLS') continue;
-
-    chk(12);
-    bold(11);
-    doc.text((sec.title || '').toUpperCase(), ML, y);
-    y += lh[11];
-    hr();
-
-    for (let ei = 0; ei < (sec.entries || []).length; ei++) {
-      const e        = sec.entries[ei];
-      const org      = (e.org      || '').trim();
-      const date     = (e.date     || '').trim();
-      const role     = (e.role     || '').trim();
-      const loc      = (e.location || '').trim();
-      const bullets  = e.bullets  || [];
-      const note     = (e.bold_note || '').trim();
-
-      if (ei > 0) y += 1.5;
-
-      if (org && date) {
-        chk(lh[11]);
-        bold(11);
-        const orgLines = doc.splitTextToSize(org, UW * 0.65);
-        doc.text(orgLines[0], ML, y);
-        normal(10);
-        doc.text(date, PW - MR, y, { align: 'right' });
-        for (let i = 1; i < orgLines.length; i++) {
-          y += lh[10]; bold(11); doc.text(orgLines[i], ML, y);
-        }
-        y += lh[11];
-      } else if (org) {
-        chk(lh[10]); bold(10);
-        doc.splitTextToSize(org, UW).forEach(ln => { doc.text(ln, ML, y); y += lh[10]; });
-      }
-
-      if (role) {
-        chk(lh[10]); italic(10);
-        doc.text(role, ML, y);
-        if (loc) doc.text(loc, PW - MR, y, { align: 'right' });
-        y += lh[10];
-      }
-
-      for (const b of bullets) {
-        chk(lh[10]); normal(10);
-        const txt   = '• ' + (b || '').trim().replace(/^[•\-\*]\s*/, '');
-        const lines = doc.splitTextToSize(txt, UW - 4);
-        lines.forEach((ln, i) => { doc.text(ln, ML + (i > 0 ? 4 : 0), y); y += lh[10]; });
-      }
-
-      if (note) {
-        chk(lh[10]);
-        const ci = note.indexOf(':');
-        if (ci > -1) {
-          const lbl  = note.slice(0, ci + 1);
-          const rest = note.slice(ci + 1);
-          const lw   = tw(lbl);
-          bold(10);   doc.text(lbl, ML, y);
-          normal(10);
-          const rLines = doc.splitTextToSize(rest, UW - lw);
-          doc.text(rLines[0], ML + lw, y); y += lh[10];
-          for (let i = 1; i < rLines.length; i++) { doc.text(rLines[i], ML, y); y += lh[10]; }
-        } else {
-          normal(10);
-          doc.splitTextToSize(note, UW).forEach(ln => { doc.text(ln, ML, y); y += lh[10]; });
-        }
-      }
-    }
-    y += 1;
+    const title = (sec.title || '').toUpperCase().trim();
+    if (title === 'SKILLS') continue;
+    sectionHeader(title);
+    (sec.entries || []).forEach((e, i) => renderEntry(e, i === 0));
   }
 
   /* ── Skills */
   const skillLines = data.skills_lines || [];
   if (skillLines.length) {
-    chk(12); bold(11);
-    doc.text('SKILLS', ML, y); y += lh[11]; hr();
-
+    sectionHeader('SKILLS');
     for (const sl of skillLines) {
       const lineStr = typeof sl === 'string' ? sl : `${sl.label || ''}: ${sl.text || ''}`;
-      chk(lh[10]);
       let x = ML;
-
-      /* render "Label: items | Label: items" with bold labels inline */
       const segs = lineStr.split(' | ');
       segs.forEach((seg, si) => {
         const prefix = si > 0 ? ' | ' : '';
@@ -1377,26 +1398,23 @@ function buildResumePdf(data) {
         if (ci > -1) {
           const lbl  = prefix + seg.slice(0, ci + 1);
           const rest = seg.slice(ci + 1);
-          bold(10);
-          const lw = tw(lbl);
-          normal(10);
-          const rw = tw(rest);
-          if (x + lw + rw > ML + UW) { y += lh[10]; x = ML; }
-          bold(10);   doc.text(lbl,  x,      y); x += lw;
-          normal(10); doc.text(rest, x,      y); x += rw;
+          bold(SZ.body); const lw = tw(lbl);
+          normal(SZ.body); const rw = tw(rest);
+          if (x + lw + rw > ML + UW) { y += LH.body; x = ML; }
+          bold(SZ.body);   doc.text(lbl,  x, y); x += lw;
+          normal(SZ.body); doc.text(rest, x, y); x += rw;
         } else {
-          normal(10);
-          const full = prefix + seg;
-          const fw   = tw(full);
-          if (x + fw > ML + UW) { y += lh[10]; x = ML; }
+          normal(SZ.body);
+          const full = prefix + seg; const fw = tw(full);
+          if (x + fw > ML + UW) { y += LH.body; x = ML; }
           doc.text(full, x, y); x += fw;
         }
       });
-      y += lh[10];
+      y += LH.body;
     }
   }
 
-  return doc.output('blob');
+  return { blob: doc.output('blob'), pages: doc.getNumberOfPages() };
 }
 </script>
 </body>
