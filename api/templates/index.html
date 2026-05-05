@@ -1272,13 +1272,17 @@ function _renderPdf(data, scale) {
     sec:     Math.round(11 * scale * 10) / 10,
     body:    Math.round(10 * scale * 10) / 10,
   };
+  /* pt → mm = pt * 0.3528; leading multiplier gives line height */
   const LH = {
-    name:  SZ.name  * 0.3528 * 1.25,
-    sec:   SZ.sec   * 0.3528 * 1.25,
-    body:  SZ.body  * 0.3528 * 1.3,
+    name:  SZ.name  * 0.3528 * 1.3,
+    sec:   SZ.sec   * 0.3528 * 1.35,
+    body:  SZ.body  * 0.3528 * 1.55,   // generous leading — key to readability
   };
-  const GAP_SEC   = 3.5 * scale;
-  const GAP_ENTRY = 1.5 * scale;
+  const GAP_SEC        = 5.0 * scale;  // space ABOVE each section header
+  const GAP_AFTER_HR   = 3.5 * scale;  // space between HR line and first content
+  const GAP_ENTRY      = 4.0 * scale;  // space between entries in same section
+  const GAP_ORG_ROLE   = 0.8 * scale;  // gap between org-name row and role row
+  const GAP_ROLE_BULLET= 0.8 * scale;  // gap between role row and first bullet
 
   let y = MT;
 
@@ -1290,7 +1294,7 @@ function _renderPdf(data, scale) {
   function hr() {
     doc.setDrawColor(0); doc.setLineWidth(0.35);
     doc.line(ML, y, PW - MR, y);
-    y += 2 * scale;
+    y += GAP_AFTER_HR;   // clear gap so text never overlaps the rule
   }
 
   function sectionHeader(title) {
@@ -1311,6 +1315,7 @@ function _renderPdf(data, scale) {
 
     if (!isFirst) y += GAP_ENTRY;
 
+    /* org name (bold) + date (normal, right-aligned) */
     if (org && date) {
       bold(SZ.sec);
       const orgLines = doc.splitTextToSize(org, UW * 0.65);
@@ -1318,37 +1323,47 @@ function _renderPdf(data, scale) {
       normal(SZ.body);
       doc.text(date, PW - MR, y, { align: 'right' });
       for (let i = 1; i < orgLines.length; i++) {
-        y += LH.body; bold(SZ.sec); doc.text(orgLines[i], ML, y);
+        y += LH.sec; bold(SZ.sec); doc.text(orgLines[i], ML, y);
       }
       y += LH.sec;
     } else if (org) {
+      /* standalone line (Varsity Soccer etc.) */
       bold(SZ.body);
       doc.splitTextToSize(org, UW).forEach(ln => { doc.text(ln, ML, y); y += LH.body; });
     }
 
+    /* role (italic) + location (italic, right-aligned) */
     if (role) {
+      y += GAP_ORG_ROLE;
       italic(SZ.body);
       doc.text(role, ML, y);
       if (loc) doc.text(loc, PW - MR, y, { align: 'right' });
       y += LH.body;
     }
 
+    /* bullets */
+    if (bullets.length) y += GAP_ROLE_BULLET;
     for (const b of bullets) {
       normal(SZ.body);
       const txt   = '• ' + (b || '').trim().replace(/^[•\-\*]\s*/, '');
-      const lines = doc.splitTextToSize(txt, UW - 4);
-      lines.forEach((ln, i) => { doc.text(ln, ML + (i > 0 ? 3.5 : 0), y); y += LH.body; });
+      const lines = doc.splitTextToSize(txt, UW - 5);
+      lines.forEach((ln, i) => {
+        doc.text(ln, ML + (i > 0 ? 4 : 0), y);
+        y += LH.body;
+      });
     }
 
+    /* bold note (Relevant Coursework etc.) */
     if (note) {
+      y += GAP_ROLE_BULLET;
       const ci = note.indexOf(':');
       if (ci > -1) {
-        const lbl  = note.slice(0, ci + 1);
-        const rest = note.slice(ci + 1);
-        bold(SZ.body);   doc.text(lbl, ML, y);
+        const lbl     = note.slice(0, ci + 1);
+        const rest    = note.slice(ci + 1).trimStart();
+        const lw      = (() => { bold(SZ.body); return tw(lbl); })();
+        doc.text(lbl, ML, y);
         normal(SZ.body);
-        const lw     = tw(lbl);
-        const rLines = doc.splitTextToSize(rest, UW - lw);
+        const rLines  = doc.splitTextToSize(' ' + rest, UW - lw - 1);
         doc.text(rLines[0], ML + lw, y); y += LH.body;
         for (let i = 1; i < rLines.length; i++) { doc.text(rLines[i], ML, y); y += LH.body; }
       } else {
@@ -1374,6 +1389,7 @@ function _renderPdf(data, scale) {
     normal(SZ.body);
     const sumLines = doc.splitTextToSize(data.summary.trim(), UW);
     sumLines.forEach(ln => { doc.text(ln, ML, y); y += LH.body; });
+    y += 1.5 * scale;  // small breath after summary block
   }
 
   /* ── Main sections */
