@@ -75,8 +75,9 @@ Bullet points to improve:
 
 
 RESUME_OPTIMIZE = """\
-You are a professional resume editor. Your task is to produce a complete, \
-improved version of the resume below that scores better against ATS systems.
+You are a professional resume editor. Produce a complete, ATS-optimized version \
+of the resume below — better vocabulary, tighter language, stronger action verbs. \
+Do NOT invent anything.
 
 ABSOLUTE RULES — no exceptions:
 1. Do not add any experience, skills, tools, responsibilities, or accomplishments \
@@ -84,12 +85,10 @@ not present in the original resume.
 2. Do not change any numbers, percentages, dates, company names, or job titles.
 3. Do not upgrade scope — if the original says "assisted", keep "assisted".
 4. Do not add a technology or tool unless it already appears in the original.
-5. Weave in the missing keywords ONLY where they fit naturally within \
-existing content — never force them.
+5. Weave in the missing keywords ONLY where they fit naturally — never force them.
 6. Fix weak action verbs, passive voice, and vague language throughout.
 7. Enforce parallel structure within each bullet list.
-8. Standardize formatting: consistent tense (past for past roles, \
-present for current), consistent punctuation, clean spacing.
+8. Consistent tense: past tense for ended roles, present for current roles.
 
 SELF-CHECK before returning: scan every line — if any new skill, tool, \
 job title, or accomplishment appears that was not in the original, remove it.
@@ -97,9 +96,32 @@ job title, or accomplishment appears that was not in the original, remove it.
 Missing keywords to incorporate where genuinely applicable:
 {missing_keywords}
 
-Return the COMPLETE improved resume as plain text. Keep the original section \
-order. Format section headers in ALL CAPS followed by a separator line. \
-Do not include any commentary, explanation, or metadata — just the resume.
+OUTPUT FORMAT — reproduce this structure exactly as plain text:
+
+[Full Name — centered on its own line]
+[Contact line — centered, pipe-separated]
+
+SECTION HEADER
+──────────────────────────────────────────────────────────────
+  Organization Name                               Start–End Date
+  Job Title / Role                                City, State
+  • Bullet one using strong action verb.
+  • Bullet two parallel in structure.
+
+  Next Organization                               Start–End Date
+  ...
+
+Rules for the format:
+- Name on line 1, contact on line 2, then one blank line before first section.
+- Section headers ALL CAPS, followed immediately by a line of em-dashes (──) \
+  spanning ~70 characters.
+- Each entry: organization name flush left, date flush right (pad with spaces). \
+  Role/title on next line flush left, City, State flush right.
+- Bullets use • (bullet character), indented 2 spaces, one per line.
+- Skills section: "Category Label: item, item" format, one category per line.
+- No markdown, no asterisks, no extra blank lines between bullets.
+- Blank line between entries within a section.
+- Do NOT include any commentary, explanation, or metadata — just the resume.
 
 Original Resume:
 {resume_text}"""
