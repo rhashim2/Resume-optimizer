@@ -21,8 +21,8 @@ def _parse_json(raw: str):
     return json.loads(raw)
 
 
-FAST_MODEL = "claude-3-5-haiku-20241022"   # ~3-5s — used for analyze
-FULL_MODEL = "claude-sonnet-4-5"           # ~25s  — used for full resume rewrite only
+FAST_MODEL = "claude-3-haiku-20240307"   # ~3-5s — used for analyze
+FULL_MODEL = "claude-sonnet-4-5"         # ~25s  — used for full resume rewrite only
 
 
 def extract_keywords_from_jd(jd_text: str) -> dict:
