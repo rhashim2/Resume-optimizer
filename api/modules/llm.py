@@ -21,11 +21,15 @@ def _parse_json(raw: str):
     return json.loads(raw)
 
 
+FAST_MODEL = "claude-3-5-haiku-20241022"   # ~3-5s — used for analyze
+FULL_MODEL = "claude-sonnet-4-5"           # ~25s  — used for full resume rewrite only
+
+
 def extract_keywords_from_jd(jd_text: str) -> dict:
     client = _get_client()
     prompt = JD_KEYWORD_EXTRACTION.format(jd_text=jd_text)
     message = client.messages.create(
-        model="claude-sonnet-4-5",
+        model=FAST_MODEL,
         max_tokens=1024,
         messages=[{"role": "user", "content": prompt}],
     )
@@ -51,7 +55,7 @@ def suggest_bullet_rewrites(
         bullets=bullets_formatted,
     )
     message = client.messages.create(
-        model="claude-sonnet-4-5",
+        model=FAST_MODEL,
         max_tokens=2048,
         messages=[{"role": "user", "content": prompt}],
     )
