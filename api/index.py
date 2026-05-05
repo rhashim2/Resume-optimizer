@@ -120,15 +120,11 @@ async def optimize_resume(
     keywords = [k.strip() for k in missing_keywords.split(",") if k.strip()]
 
     try:
-        pdf_bytes = generate_optimized_resume(resume_text, keywords)
+        resume_data = generate_optimized_resume(resume_text, keywords)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Resume optimization failed: {exc}")
 
-    return Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
-        headers={"Content-Disposition": 'attachment; filename="optimized_resume.pdf"'},
-    )
+    return {"resume_data": resume_data}
 
 
 def _merge_role_keywords(jd_keywords: dict, profile: dict) -> dict:
