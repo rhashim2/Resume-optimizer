@@ -72,3 +72,34 @@ Return ONLY a valid JSON array with no extra text:
 
 Bullet points to improve:
 {bullets}"""
+
+
+RESUME_OPTIMIZE = """\
+You are a professional resume editor. Your task is to produce a complete, \
+improved version of the resume below that scores better against ATS systems.
+
+ABSOLUTE RULES — no exceptions:
+1. Do not add any experience, skills, tools, responsibilities, or accomplishments \
+not present in the original resume.
+2. Do not change any numbers, percentages, dates, company names, or job titles.
+3. Do not upgrade scope — if the original says "assisted", keep "assisted".
+4. Do not add a technology or tool unless it already appears in the original.
+5. Weave in the missing keywords ONLY where they fit naturally within \
+existing content — never force them.
+6. Fix weak action verbs, passive voice, and vague language throughout.
+7. Enforce parallel structure within each bullet list.
+8. Standardize formatting: consistent tense (past for past roles, \
+present for current), consistent punctuation, clean spacing.
+
+SELF-CHECK before returning: scan every line — if any new skill, tool, \
+job title, or accomplishment appears that was not in the original, remove it.
+
+Missing keywords to incorporate where genuinely applicable:
+{missing_keywords}
+
+Return the COMPLETE improved resume as plain text. Keep the original section \
+order. Format section headers in ALL CAPS followed by a separator line. \
+Do not include any commentary, explanation, or metadata — just the resume.
+
+Original Resume:
+{resume_text}"""

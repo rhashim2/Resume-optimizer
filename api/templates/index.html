@@ -632,6 +632,56 @@
       grid-column: 1 / -1;
     }
     .added-chips .rewrite-col-label { margin-bottom: 6px; }
+
+    /* ── Optimize button ──────────────────────── */
+    #optimize-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 16px;
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border-md);
+      border-radius: var(--radius);
+      font: 600 13px inherit;
+      cursor: pointer;
+      transition: border-color .15s, box-shadow .15s, background .15s;
+      white-space: nowrap;
+    }
+    #optimize-btn svg { width: 14px; height: 14px; color: var(--accent); }
+    #optimize-btn:hover:not(:disabled) {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+    }
+    #optimize-btn:disabled { opacity: .55; cursor: not-allowed; }
+
+    .action-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 12px;
+      background: var(--bg);
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font: 500 12px inherit;
+      cursor: pointer;
+      transition: color .12s, border-color .12s;
+    }
+    .action-btn:hover { color: var(--text); border-color: var(--border-md); }
+
+    .optimized-pre {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      font: 13px/1.7 "SF Mono", "Fira Code", "Courier New", monospace;
+      color: var(--text);
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 600px;
+      overflow-y: auto;
+    }
   </style>
 </head>
 <body>
@@ -831,6 +881,46 @@
       <div id="rewrites-list"></div>
     </div>
 
+    <!-- Generate optimized resume -->
+    <div id="optimize-trigger" style="display:none;">
+      <hr class="divider" />
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:12px;">
+        <div>
+          <div class="rewrites-title" style="margin:0 0 4px;">Optimized Resume</div>
+          <div style="font-size:12px;color:var(--muted);">
+            Full resume reworded for ATS — no experience added, no fabrication.
+          </div>
+        </div>
+        <button id="optimize-btn" onclick="generateOptimized()">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/>
+          </svg>
+          <span id="opt-btn-label">Generate Optimized Resume</span>
+        </button>
+      </div>
+
+      <div id="optimized-output" style="display:none;">
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <button class="action-btn" onclick="copyOptimized()">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184"/>
+            </svg>
+            Copy
+          </button>
+          <button class="action-btn" onclick="downloadOptimized()">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+            </svg>
+            Download .txt
+          </button>
+        </div>
+        <pre id="optimized-text" class="optimized-pre"></pre>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -939,9 +1029,17 @@ function showError(msg) {
 }
 function clearError() { document.getElementById('error-msg').classList.remove('visible'); }
 
+/* ── Optimize state ── */
+let _resumeText    = '';
+let _missingKws    = [];
+
 /* ── Render ── */
 function render(data) {
   const { overall_score, matched, missing, weak, rewrites, role } = data;
+
+  /* stash for optimize */
+  _resumeText = data.resume_text || '';
+  _missingKws = missing || [];
   const total = matched.length + missing.length;
 
   /* Ring */
@@ -1034,6 +1132,13 @@ function render(data) {
     });
   } else { sec.style.display = 'none'; }
 
+  /* Show optimize section; reset any previous output */
+  document.getElementById('optimize-trigger').style.display = 'block';
+  document.getElementById('optimized-output').style.display = 'none';
+  document.getElementById('optimized-text').textContent = '';
+  document.getElementById('opt-btn-label').textContent = 'Generate Optimized Resume';
+  document.getElementById('optimize-btn').disabled = false;
+
   const res = document.getElementById('results');
   res.style.display = 'block'; res.classList.add('visible');
   setTimeout(() => res.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
@@ -1049,6 +1154,68 @@ function setChips(id, words, cls) {
     const s = document.createElement('span');
     s.className = 'chip ' + cls; s.textContent = w; el.appendChild(s);
   });
+}
+
+/* ── Generate optimized resume ── */
+async function generateOptimized() {
+  if (!_resumeText) {
+    alert('Resume text unavailable. Re-run the analysis first.');
+    return;
+  }
+
+  const optBtn   = document.getElementById('optimize-btn');
+  const optLabel = document.getElementById('opt-btn-label');
+  optBtn.disabled  = true;
+  optLabel.textContent = 'Generating…';
+
+  const form = new FormData();
+  form.append('resume_text',      _resumeText);
+  form.append('missing_keywords', _missingKws.join(','));
+
+  try {
+    const r    = await fetch('/api/optimize', { method: 'POST', body: form });
+    const data = await r.json();
+    if (!r.ok) {
+      alert(data.detail || 'Optimization failed. Please try again.');
+      return;
+    }
+    const pre = document.getElementById('optimized-text');
+    pre.textContent = data.optimized_resume || '';
+    document.getElementById('optimized-output').style.display = 'block';
+    optLabel.textContent = 'Regenerate';
+    pre.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch {
+    alert('Network error — check your connection and try again.');
+    optLabel.textContent = 'Generate Optimized Resume';
+  } finally {
+    optBtn.disabled = false;
+  }
+}
+
+/* ── Copy optimized text ── */
+async function copyOptimized() {
+  const text = document.getElementById('optimized-text').textContent;
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+    const btn = event.currentTarget;
+    const orig = btn.innerHTML;
+    btn.innerHTML = btn.innerHTML.replace('Copy', 'Copied!');
+    setTimeout(() => { btn.innerHTML = orig; }, 1800);
+  } catch { alert('Copy failed. Select the text manually.'); }
+}
+
+/* ── Download optimized text ── */
+function downloadOptimized() {
+  const text = document.getElementById('optimized-text').textContent;
+  if (!text) return;
+  const blob = new Blob([text], { type: 'text/plain' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'optimized_resume.txt';
+  a.click();
+  URL.revokeObjectURL(url);
 }
 </script>
 </body>

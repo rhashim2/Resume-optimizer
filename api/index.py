@@ -102,7 +102,29 @@ async def analyze(
         "rewrites": rewrites,
         "jd_keywords": jd_keywords,
         "role": role,
+        "resume_text": resume_content,
     }
+
+
+@app.post("/api/optimize")
+async def optimize_resume(
+    resume_text: str = Form(...),
+    missing_keywords: str = Form(""),
+):
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not configured.")
+
+    from modules.llm import generate_optimized_resume
+
+    keywords = [k.strip() for k in missing_keywords.split(",") if k.strip()]
+
+    try:
+        optimized = generate_optimized_resume(resume_text, keywords)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Resume optimization failed: {exc}")
+
+    return {"optimized_resume": optimized}
 
 
 def _merge_role_keywords(jd_keywords: dict, profile: dict) -> dict:

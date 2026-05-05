@@ -1,7 +1,7 @@
 import json
 import os
 
-from modules.prompts import BULLET_REWRITE, JD_KEYWORD_EXTRACTION
+from modules.prompts import BULLET_REWRITE, JD_KEYWORD_EXTRACTION, RESUME_OPTIMIZE
 
 
 def _get_client():
@@ -56,3 +56,21 @@ def suggest_bullet_rewrites(
         messages=[{"role": "user", "content": prompt}],
     )
     return _parse_json(message.content[0].text)
+
+
+def generate_optimized_resume(
+    resume_text: str,
+    missing_keywords: list[str],
+) -> str:
+    client = _get_client()
+    keywords_str = ", ".join(missing_keywords[:20])
+    prompt = RESUME_OPTIMIZE.format(
+        missing_keywords=keywords_str,
+        resume_text=resume_text,
+    )
+    message = client.messages.create(
+        model="claude-sonnet-4-5",
+        max_tokens=4096,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return message.content[0].text.strip()
