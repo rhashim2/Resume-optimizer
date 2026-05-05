@@ -75,9 +75,9 @@ Bullet points to improve:
 
 
 RESUME_OPTIMIZE = """\
-You are a professional resume editor. Produce a complete, ATS-optimized version \
-of the resume below — better vocabulary, tighter language, stronger action verbs. \
-Do NOT invent anything.
+You are a professional resume editor. Produce an ATS-optimized version of the \
+resume below with stronger action verbs, tighter language, and natural keyword \
+integration. Do NOT invent anything.
 
 ABSOLUTE RULES — no exceptions:
 1. Do not add any experience, skills, tools, responsibilities, or accomplishments \
@@ -90,38 +90,59 @@ not present in the original resume.
 7. Enforce parallel structure within each bullet list.
 8. Consistent tense: past tense for ended roles, present for current roles.
 
-SELF-CHECK before returning: scan every line — if any new skill, tool, \
-job title, or accomplishment appears that was not in the original, remove it.
+SELF-CHECK: scan every entry — if any new skill, tool, job title, or \
+accomplishment appears that was not in the original, remove it.
 
 Missing keywords to incorporate where genuinely applicable:
 {missing_keywords}
 
-OUTPUT FORMAT — reproduce this structure exactly as plain text:
+Return ONLY a valid JSON object — no markdown fences, no extra text:
+{{
+  "name": "Full Name",
+  "contact": "Address | Phone | Email | LinkedIn",
+  "sections": [
+    {{
+      "title": "EDUCATION",
+      "entries": [
+        {{
+          "org": "University Name",
+          "date": "Expected Month Year",
+          "role": "Degree Program",
+          "location": "City, ST",
+          "bullets": [],
+          "bold_note": "Relevant Coursework: Course 1, Course 2, Course 3"
+        }}
+      ]
+    }},
+    {{
+      "title": "EXPERIENCE",
+      "entries": [
+        {{
+          "org": "Company Name",
+          "date": "Month Year–Month Year",
+          "role": "Job Title",
+          "location": "City, ST",
+          "bullets": ["Bullet one.", "Bullet two."],
+          "bold_note": null
+        }}
+      ]
+    }}
+  ],
+  "skills_lines": [
+    "Languages: Python, JavaScript | Data & Analytics: Excel (Financial Modeling), Pandas | AI Tools: Cursor, Claude Code, LangFlow",
+    "Tools: Microsoft Office, Canva | Languages Spoken: Fluent Malayalam | Conversational French"
+  ]
+}}
 
-[Full Name — centered on its own line]
-[Contact line — centered, pipe-separated]
-
-SECTION HEADER
-──────────────────────────────────────────────────────────────
-  Organization Name                               Start–End Date
-  Job Title / Role                                City, State
-  • Bullet one using strong action verb.
-  • Bullet two parallel in structure.
-
-  Next Organization                               Start–End Date
-  ...
-
-Rules for the format:
-- Name on line 1, contact on line 2, then one blank line before first section.
-- Section headers ALL CAPS, followed immediately by a line of em-dashes (──) \
-  spanning ~70 characters.
-- Each entry: organization name flush left, date flush right (pad with spaces). \
-  Role/title on next line flush left, City, State flush right.
-- Bullets use • (bullet character), indented 2 spaces, one per line.
-- Skills section: "Category Label: item, item" format, one category per line.
-- No markdown, no asterisks, no extra blank lines between bullets.
-- Blank line between entries within a section.
-- Do NOT include any commentary, explanation, or metadata — just the resume.
+Schema rules:
+- Preserve every section from the original in the same order.
+- Do NOT include a SKILLS entry inside sections[] — put skills in skills_lines[].
+- skills_lines[] is an array of plain strings; use "Label: items | Label: items" \
+  format grouping categories on the same line as the original.
+- For standalone lines with no role/date (e.g. "Varsity Soccer — ..."), \
+  set org to the full line text and leave date, role, location as "".
+- bold_note is for lines like "Relevant Coursework: ..." — null if none.
+- bullets[] contains the text only, no leading bullet character.
 
 Original Resume:
 {resume_text}"""

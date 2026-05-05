@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 
 app = FastAPI(title="Resume Keyword Optimizer")
 
@@ -120,11 +120,15 @@ async def optimize_resume(
     keywords = [k.strip() for k in missing_keywords.split(",") if k.strip()]
 
     try:
-        optimized = generate_optimized_resume(resume_text, keywords)
+        pdf_bytes = generate_optimized_resume(resume_text, keywords)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Resume optimization failed: {exc}")
 
-    return {"optimized_resume": optimized}
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="optimized_resume.pdf"'},
+    )
 
 
 def _merge_role_keywords(jd_keywords: dict, profile: dict) -> dict:

@@ -61,7 +61,8 @@ def suggest_bullet_rewrites(
 def generate_optimized_resume(
     resume_text: str,
     missing_keywords: list[str],
-) -> str:
+) -> bytes:
+    """Return a formatted PDF (bytes) of the ATS-optimized resume."""
     client = _get_client()
     keywords_str = ", ".join(missing_keywords[:20])
     prompt = RESUME_OPTIMIZE.format(
@@ -70,7 +71,10 @@ def generate_optimized_resume(
     )
     message = client.messages.create(
         model="claude-sonnet-4-5",
-        max_tokens=4096,
+        max_tokens=5000,
         messages=[{"role": "user", "content": prompt}],
     )
-    return message.content[0].text.strip()
+    data = _parse_json(message.content[0].text)
+
+    from modules.pdf_builder import build_resume_pdf
+    return build_resume_pdf(data)
