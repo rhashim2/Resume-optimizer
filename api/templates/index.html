@@ -1013,12 +1013,18 @@ btn.addEventListener('click', async () => {
 
   runStepAnim();
   try {
-    const r    = await fetch('/api/analyze', { method: 'POST', body: form });
-    const data = await r.json();
-    if (!r.ok) { showError(data.detail || 'Analysis failed. Please try again.'); return; }
+    const r = await fetch('/api/analyze', { method: 'POST', body: form });
+    let data;
+    try { data = await r.json(); } catch { data = {}; }
+    if (!r.ok) {
+      showError(`Error ${r.status}: ${data.detail || 'Analysis failed. Please try again.'}`);
+      return;
+    }
     render(data);
-  } catch { showError('Network error — check your connection and try again.'); }
-  finally  { setLoading(false); }
+  } catch (err) {
+    showError(`Request failed: ${err.message || err}. Open DevTools → Network tab to see more.`);
+  }
+  finally { setLoading(false); }
 });
 
 /* ── Loading ── */
