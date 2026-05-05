@@ -1169,9 +1169,9 @@ function render(data) {
   /* Show optimize section; reset any previous output */
   document.getElementById('optimize-trigger').style.display = 'block';
   document.getElementById('optimized-output').style.display = 'none';
-  document.getElementById('optimized-text').textContent = '';
   document.getElementById('opt-btn-label').textContent = 'Generate Optimized Resume';
   document.getElementById('optimize-btn').disabled = false;
+  if (_pdfBlobUrl) { URL.revokeObjectURL(_pdfBlobUrl); _pdfBlobUrl = null; }
 
   const res = document.getElementById('results');
   res.style.display = 'block'; res.classList.add('visible');
