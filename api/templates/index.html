@@ -1248,14 +1248,13 @@ function redownloadPdf() {
   if (_pdfBlobUrl) _download(_pdfBlobUrl, 'optimized_resume.pdf');
 }
 
-/* ── jsPDF resume builder — auto-scales to fit 1 page ── */
+/* ── jsPDF resume builder — matches Resume Template 2.docx exactly ── */
 function buildResumePdf(data) {
-  /* Try at full scale, then shrink until it fits on one page */
-  for (let scale = 1.0; scale >= 0.78; scale -= 0.06) {
+  for (let scale = 1.0; scale >= 0.78; scale -= 0.05) {
     const { blob, pages } = _renderPdf(data, scale);
     if (pages <= 1) return blob;
   }
-  return _renderPdf(data, 0.78).blob;  // best effort
+  return _renderPdf(data, 0.78).blob;
 }
 
 function _renderPdf(data, scale) {
@@ -1263,26 +1262,35 @@ function _renderPdf(data, scale) {
   const doc = new jsPDF({ unit: 'mm', format: 'letter' });
 
   const PW = 215.9, PH = 279.4;
-  const ML = 19.05, MR = 19.05, MT = 14, MB = 12;
-  const UW = PW - ML - MR;
 
-  /* scaled sizes */
+  /* Match template margins exactly: L=0.2", R=0.22", T/B=0.4" */
+  const ML = 5.08  * scale + (1 - scale) * 5.08;   // ~5mm, stays tight
+  const MR = 5.59  * scale + (1 - scale) * 5.59;
+  const MT = 10.0;   // small top — template is essentially 0 but need min printable
+  const MB = 8.0;
+  const UW = PW - ML - MR;   // ~205mm usable — wide, like the template
+
+  /* Font sizes from template: name=20pt, headers+body=11pt */
   const SZ = {
-    name:    Math.round(18 * scale * 10) / 10,
-    sec:     Math.round(11 * scale * 10) / 10,
-    body:    Math.round(10 * scale * 10) / 10,
+    name: Math.round(20 * scale * 10) / 10,
+    sec:  Math.round(11 * scale * 10) / 10,
+    body: Math.round(11 * scale * 10) / 10,
   };
-  /* pt → mm = pt * 0.3528; leading multiplier gives line height */
+
+  /* Line heights: pt × 0.3528 = mm; template uses ~single spacing (1.0×) */
   const LH = {
-    name:  SZ.name  * 0.3528 * 1.3,
-    sec:   SZ.sec   * 0.3528 * 1.35,
-    body:  SZ.body  * 0.3528 * 1.55,   // generous leading — key to readability
+    name:  SZ.name * 0.3528 * 1.15,
+    sec:   SZ.sec  * 0.3528 * 1.15,
+    body:  SZ.body * 0.3528 * 1.20,
   };
-  const GAP_SEC        = 5.0 * scale;  // space ABOVE each section header
-  const GAP_AFTER_HR   = 3.5 * scale;  // space between HR line and first content
-  const GAP_ENTRY      = 4.0 * scale;  // space between entries in same section
-  const GAP_ORG_ROLE   = 0.8 * scale;  // gap between org-name row and role row
-  const GAP_ROLE_BULLET= 0.8 * scale;  // gap between role row and first bullet
+
+  /* Gaps — tight like the template */
+  const GAP_AFTER_CONTACT = 1.5 * scale;
+  const GAP_SEC           = 3.5 * scale;   // space above section header
+  const GAP_AFTER_HR      = 2.5 * scale;   // space below HR before first entry
+  const GAP_ENTRY         = 2.5 * scale;   // between entries within a section
+  const GAP_ORG_ROLE      = 0.4 * scale;   // between org line and role line
+  const GAP_ROLE_BULLET   = 0.4 * scale;   // between role line and bullets
 
   let y = MT;
 
@@ -1291,48 +1299,56 @@ function _renderPdf(data, scale) {
   const italic = s => { doc.setFont('times', 'italic'); doc.setFontSize(s); };
   const tw     = t => doc.getTextWidth(t);
 
+  /* ── Horizontal rule — full width, thin */
   function hr() {
-    doc.setDrawColor(0); doc.setLineWidth(0.35);
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.3);
     doc.line(ML, y, PW - MR, y);
-    y += GAP_AFTER_HR;   // clear gap so text never overlaps the rule
+    y += GAP_AFTER_HR;
   }
 
+  /* ── Section header: BOLD TITLE + HR */
   function sectionHeader(title) {
     y += GAP_SEC;
     bold(SZ.sec);
-    doc.text(title, ML, y);
-    y += LH.sec;
+    doc.text(title.toUpperCase(), ML, y);
+    y += LH.sec * 0.85;   // small gap between text baseline and rule
     hr();
   }
 
+  /* ── Single resume entry */
   function renderEntry(e, isFirst) {
-    const org     = (e.org      || '').trim();
-    const date    = (e.date     || '').trim();
-    const role    = (e.role     || '').trim();
-    const loc     = (e.location || '').trim();
-    const bullets = e.bullets || [];
-    const note    = (e.bold_note || '').trim();
+    const org    = (e.org       || '').trim();
+    const date   = (e.date      || '').trim();
+    const role   = (e.role      || '').trim();
+    const loc    = (e.location  || '').trim();
+    const bullets = e.bullets   || [];
+    const note   = (e.bold_note || '').trim();
 
     if (!isFirst) y += GAP_ENTRY;
 
-    /* org name (bold) + date (normal, right-aligned) */
+    /* Line 1: OrgName (bold) left | date (italic) right — matching template */
     if (org && date) {
+      /* measure date width first to position org correctly */
+      italic(SZ.body);
+      const dateW = tw(date);
       bold(SZ.sec);
-      const orgLines = doc.splitTextToSize(org, UW * 0.65);
+      const orgMaxW = UW - dateW - 3;
+      const orgLines = doc.splitTextToSize(org, orgMaxW);
       doc.text(orgLines[0], ML, y);
-      normal(SZ.body);
+      italic(SZ.body);
       doc.text(date, PW - MR, y, { align: 'right' });
       for (let i = 1; i < orgLines.length; i++) {
-        y += LH.sec; bold(SZ.sec); doc.text(orgLines[i], ML, y);
+        y += LH.body; bold(SZ.sec); doc.text(orgLines[i], ML, y);
       }
       y += LH.sec;
     } else if (org) {
-      /* standalone line (Varsity Soccer etc.) */
+      /* standalone bold line (Varsity Soccer etc.) */
       bold(SZ.body);
       doc.splitTextToSize(org, UW).forEach(ln => { doc.text(ln, ML, y); y += LH.body; });
     }
 
-    /* role (italic) + location (italic, right-aligned) */
+    /* Line 2: Role (italic) left | Location (italic) right */
     if (role) {
       y += GAP_ORG_ROLE;
       italic(SZ.body);
@@ -1341,30 +1357,31 @@ function _renderPdf(data, scale) {
       y += LH.body;
     }
 
-    /* bullets */
+    /* Bullets */
     if (bullets.length) y += GAP_ROLE_BULLET;
     for (const b of bullets) {
       normal(SZ.body);
       const txt   = '• ' + (b || '').trim().replace(/^[•\-\*]\s*/, '');
-      const lines = doc.splitTextToSize(txt, UW - 5);
+      const lines = doc.splitTextToSize(txt, UW - 4);
       lines.forEach((ln, i) => {
-        doc.text(ln, ML + (i > 0 ? 4 : 0), y);
+        doc.text(ln, ML + (i > 0 ? 3.5 : 0), y);
         y += LH.body;
       });
     }
 
-    /* bold note (Relevant Coursework etc.) */
+    /* Bold note: "Relevant Coursework: ..." */
     if (note) {
       y += GAP_ROLE_BULLET;
       const ci = note.indexOf(':');
       if (ci > -1) {
-        const lbl     = note.slice(0, ci + 1);
-        const rest    = note.slice(ci + 1).trimStart();
-        const lw      = (() => { bold(SZ.body); return tw(lbl); })();
+        const lbl  = note.slice(0, ci + 1);
+        const rest = note.slice(ci + 1).trimStart();
+        bold(SZ.body);
+        const lw = tw(lbl);
         doc.text(lbl, ML, y);
         normal(SZ.body);
-        const rLines  = doc.splitTextToSize(' ' + rest, UW - lw - 1);
-        doc.text(rLines[0], ML + lw, y); y += LH.body;
+        const rLines = doc.splitTextToSize(rest, UW - lw - 1);
+        doc.text(rLines[0], ML + lw + 1, y); y += LH.body;
         for (let i = 1; i < rLines.length; i++) { doc.text(rLines[i], ML, y); y += LH.body; }
       } else {
         normal(SZ.body);
@@ -1373,26 +1390,27 @@ function _renderPdf(data, scale) {
     }
   }
 
-  /* ── Name */
-  bold(SZ.name);
+  /* ═══ BUILD PAGE ═══ */
+
+  /* Name — 20pt, centered, not bold (matches template) */
+  normal(SZ.name);
   doc.text(data.name || '', PW / 2, y, { align: 'center' });
   y += LH.name;
 
-  /* ── Contact */
+  /* Contact — 11pt, centered */
   normal(SZ.body);
   doc.text(data.contact || '', PW / 2, y, { align: 'center' });
-  y += LH.body;
+  y += LH.body + GAP_AFTER_CONTACT;
 
-  /* ── Summary */
+  /* Summary */
   if (data.summary) {
     sectionHeader('SUMMARY');
     normal(SZ.body);
-    const sumLines = doc.splitTextToSize(data.summary.trim(), UW);
-    sumLines.forEach(ln => { doc.text(ln, ML, y); y += LH.body; });
-    y += 1.5 * scale;  // small breath after summary block
+    doc.splitTextToSize(data.summary.trim(), UW)
+       .forEach(ln => { doc.text(ln, ML, y); y += LH.body; });
   }
 
-  /* ── Main sections */
+  /* Main sections */
   for (const sec of (data.sections || [])) {
     const title = (sec.title || '').toUpperCase().trim();
     if (title === 'SKILLS') continue;
@@ -1400,30 +1418,31 @@ function _renderPdf(data, scale) {
     (sec.entries || []).forEach((e, i) => renderEntry(e, i === 0));
   }
 
-  /* ── Skills */
+  /* Skills */
   const skillLines = data.skills_lines || [];
   if (skillLines.length) {
     sectionHeader('SKILLS');
     for (const sl of skillLines) {
       const lineStr = typeof sl === 'string' ? sl : `${sl.label || ''}: ${sl.text || ''}`;
       let x = ML;
-      const segs = lineStr.split(' | ');
-      segs.forEach((seg, si) => {
+      lineStr.split(' | ').forEach((seg, si) => {
         const prefix = si > 0 ? ' | ' : '';
         const ci     = seg.indexOf(':');
         if (ci > -1) {
           const lbl  = prefix + seg.slice(0, ci + 1);
           const rest = seg.slice(ci + 1);
-          bold(SZ.body); const lw = tw(lbl);
-          normal(SZ.body); const rw = tw(rest);
+          bold(SZ.body);
+          const lw = tw(lbl);
+          normal(SZ.body);
+          const rw = tw(rest);
           if (x + lw + rw > ML + UW) { y += LH.body; x = ML; }
           bold(SZ.body);   doc.text(lbl,  x, y); x += lw;
           normal(SZ.body); doc.text(rest, x, y); x += rw;
         } else {
           normal(SZ.body);
-          const full = prefix + seg; const fw = tw(full);
-          if (x + fw > ML + UW) { y += LH.body; x = ML; }
-          doc.text(full, x, y); x += fw;
+          const full = prefix + seg;
+          if (x + tw(full) > ML + UW) { y += LH.body; x = ML; }
+          doc.text(full, x, y); x += tw(full);
         }
       });
       y += LH.body;
